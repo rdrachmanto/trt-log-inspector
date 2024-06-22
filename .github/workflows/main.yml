@@ -1,5 +1,9 @@
 name: Auto approve
-on: pull_request_target
+on: 
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
 
 jobs:
   auto_approve:
@@ -12,13 +16,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          const github = require('@actions/github');
-          const octokit = new github.getOctokit('${{ secrets.GITHUB_TOKEN }}');
-          
-          const { owner, repo, number } = github.context.issue;
-          octokit.pulls.createReview({
-            owner,
-            repo,
-            pull_number: number,
-            event: 'APPROVE'
-          });
+          echo "Auto-approving PR"
+
+          # Extract pull request number from GitHub context
+          PR_NUMBER=$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')
+
+          # Approve the pull request using GitHub API
+          curl -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/reviews" \
+            -d '{"event": "APPROVE"}'
