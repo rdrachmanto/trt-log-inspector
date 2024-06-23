@@ -1,15 +1,20 @@
 import re
-from typing import Dict, Generator, List, Union
+from typing import Generator, Self, Union
+
+from prettytable import PrettyTable
+
+from trt_log_inspector.display_log_data import DisplayLogData
 
 
-class TrtLogFile:
+class TrtLogFile(DisplayLogData):
     """
     Core class for examining the TensorRT (TRT) log file.
     """
 
     def __init__(self, name: str, path: str) -> None:
-        self.name = (name,)
+        self.name = name
         self.path = path
+        self.results = []
 
     def _parse_line(
         self, query: Union[None, list[re.Pattern]] = None
@@ -37,7 +42,7 @@ class TrtLogFile:
         except FileNotFoundError:
             raise FileNotFoundError(f"{self.path} cannot be opened")
 
-    def conversion_duration_info(self) -> List[Dict[str, float]]:
+    def conversion_duration_info(self) -> Self:
         """
         Extract conversion duration information for each stages of conversion.
 
@@ -49,6 +54,7 @@ class TrtLogFile:
             "Formats and tactics selection",
             "Engine generation",
             "Calibration",
+            "Post Processing Calibration",
             "Configuring builder",
             "Graph construction and optimization",
             "Finished engine building",
@@ -58,18 +64,30 @@ class TrtLogFile:
         ]
         line_parser = self._parse_line(query=re_stages_filter)
 
-        results = []
         for pr in line_parser:
             detected_stage = ""
             for s in stages:
                 if s in pr:
                     detected_stage = s
 
-            results.append(
+            self.results.append(
                 {
                     "stage": detected_stage,
                     "duration_s": float(re.findall(r"\d+\.\d+", pr)[0]),  # type: ignore
                 }
             )
 
-        return results
+        return self 
+
+    def display_table(self):
+        table = PrettyTable()
+        table.field_names = list(self.results[0].keys())
+        table.align = "l"
+
+        for r in self.results:
+            table.add_row(list(r.values()))
+
+        print(table)
+
+    def display_plot(self):
+        raise NotImplementedError
