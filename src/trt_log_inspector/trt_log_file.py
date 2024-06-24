@@ -3,8 +3,8 @@ from typing import Generator, Self, Union
 
 from prettytable import PrettyTable
 
-from trt_log_inspector.display_log_data import DisplayLogData
-
+from trt_log_inspector.coreutils.display_log_data import DisplayLogData
+from trt_log_inspector.coreutils.validations import InvalidLogFileError
 
 class TrtLogFile(DisplayLogData):
     """
@@ -12,9 +12,11 @@ class TrtLogFile(DisplayLogData):
     """
 
     def __init__(self, name: str, path: str) -> None:
-        self.name = name
-        self.path = path
+        self.name: str = name
+        self.path: str = path
         self.results = []
+
+        self._check_trt_log_validity()
 
     def _parse_line(
         self, query: Union[None, list[re.Pattern]] = None
@@ -41,6 +43,41 @@ class TrtLogFile(DisplayLogData):
                         yield line.strip()
         except FileNotFoundError:
             raise FileNotFoundError(f"{self.path} cannot be opened")
+
+    def _check_trt_log_validity(self) -> None:
+        """
+        Checking validity of log file by matching against some information:
+        - Input filename
+        - ONNX IR version
+        - Opset version
+        - Producer name
+        - Producer version
+
+        Raises:
+        - InvalidLogFileError: If any information is missing in the log file.
+        """
+
+        identities = [
+            "Input filename",
+            "ONNX IR version",
+            "Opset version",
+            "Producer name",
+            "Producer version"
+        ]
+        re_ident_filter = [
+            re.compile(f"{pattern}.*") for pattern in identities
+        ]
+        line_parser = self._parse_line(query=re_ident_filter)
+
+        matches = set()
+        for pr in line_parser:
+            for id in identities:
+                if id in pr:
+                    matches.add(id)
+
+        missing = set(identities) - matches
+        if missing:
+            raise InvalidLogFileError(missing)
 
     def conversion_duration_info(self) -> Self:
         """
@@ -79,7 +116,7 @@ class TrtLogFile(DisplayLogData):
 
         return self 
 
-    def display_table(self):
+    def display_table(self) -> None:
         table = PrettyTable()
         table.field_names = list(self.results[0].keys())
         table.align = "l"
