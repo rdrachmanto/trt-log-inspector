@@ -1,10 +1,14 @@
 import re
-from typing import Generator, Self, Union
+from typing import Self, override
+from collections.abc import Generator
 
 from prettytable import PrettyTable
+import pandas as pd  # type: ignore[reportMissingStubs]
+import matplotlib.pyplot as plt
 
 from trt_log_inspector.coreutils.display_log_data import DisplayLogData
 from trt_log_inspector.coreutils.validations import InvalidLogFileError
+
 
 class TrtLogFile(DisplayLogData):
     """
@@ -14,13 +18,13 @@ class TrtLogFile(DisplayLogData):
     def __init__(self, name: str, path: str) -> None:
         self.name: str = name
         self.path: str = path
-        self.results = []
+        self.results: list[dict[str, object]] = []
 
         self._check_trt_log_validity()
 
     def _parse_line(
-        self, query: Union[None, list[re.Pattern]] = None
-    ) -> Generator[str, Union[None, list[re.Pattern]], None]:
+        self, query: None | list[re.Pattern[str]] = None
+    ) -> Generator[str, None | list[re.Pattern[str]], None]:
         """
         Attempt to open the file from `self.path` and apply query (if specified) to filter the text.
 
@@ -62,14 +66,12 @@ class TrtLogFile(DisplayLogData):
             "ONNX IR version",
             "Opset version",
             "Producer name",
-            "Producer version"
+            "Producer version",
         ]
-        re_ident_filter = [
-            re.compile(f"{pattern}.*") for pattern in identities
-        ]
+        re_ident_filter = [re.compile(f"{pattern}.*") for pattern in identities]
         line_parser = self._parse_line(query=re_ident_filter)
 
-        matches = set()
+        matches: set[str] = set()
         for pr in line_parser:
             for id in identities:
                 if id in pr:
@@ -110,21 +112,28 @@ class TrtLogFile(DisplayLogData):
             self.results.append(
                 {
                     "stage": detected_stage,
-                    "duration_s": float(re.findall(r"\d+\.\d+", pr)[0]),  # type: ignore
+                    "duration_s": float(re.findall(r"\d+\.\d+", pr)[0]),  # type: ignore[reportAny]
                 }
             )
 
-        return self 
+        return self
 
+    @override
     def display_table(self) -> None:
         table = PrettyTable()
         table.field_names = list(self.results[0].keys())
         table.align = "l"
 
         for r in self.results:
-            table.add_row(list(r.values()))
+            table.add_row(list(r.values()))  # type: ignore[reportUnknownMemberType]
 
         print(table)
 
+    @override
     def display_plot(self):
-        raise NotImplementedError
+        rec = pd.DataFrame.from_records(self.results)  # type:ignore[reportUnknownMemberType]
+
+        rec.plot(x="stage", y="duration_s", kind="bar")  # type:ignore[reportUnknownMemberType]
+        plt.tight_layout()
+        plt.grid()  # type:ignore[reportUnknownMemberType]
+        plt.show()  # type:ignore[reportUnknownMemberType]
